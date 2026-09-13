@@ -2452,21 +2452,22 @@ impl WorkspaceView {
                 crate::metrics::inc(crate::metrics::hidden_terminal_updates());
                 continue;
             }
-            // Pi's regular TUI redraws the whole screen on every output
-            // burst. While the user is browsing its scrollback (viewport
-            // above the live bottom) those redraws must not pull the viewport
-            // to the live bottom; the pinned viewport plus the disabled
-            // smooth-scroll paint offset keep the reading position stable.
-            let pi_output_guard = self
-                .pi_agent_running_for_terminal(terminal_id)
-                && self
-                    .terminal_snapshot_for(terminal_id)
-                    .is_some_and(|snapshot| snapshot.viewport_position > 0);
-            if pi_output_guard {
+            // While the user is browsing scrollback (viewport above the
+            // live bottom), output must not pull the viewport to the live
+            // bottom. The pinned emulator viewport plus the disabled
+            // smooth-scroll paint offset keep the reading position stable
+            // while new output grows the grid behind it. Keystrokes
+            // (focus_terminal_live_bottom in the input handler) return the
+            // viewport to the live bottom, which also trims the scrollback
+            // back to the configured limit.
+            let is_browsing = self
+                .terminal_snapshot_for(terminal_id)
+                .is_some_and(|snapshot| snapshot.viewport_position > 0);
+            if is_browsing {
                 self.focus_terminal_live_bottom_guarded(terminal_id, cx);
-            } else {
-                self.focus_terminal_live_bottom(terminal_id, cx);
             }
+            // At the live bottom (viewport_position == 0) the emulator is
+            // already in live-follow mode — no action needed on output.
             let previous = self.terminal_snapshots.get(&terminal_id).cloned();
             let previous_ref = previous.as_deref();
             let snapshot = application.terminal_snapshot(connection_id, terminal_id, previous_ref);
